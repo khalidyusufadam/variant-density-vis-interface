@@ -1,0 +1,230 @@
+<!-- <!DOCTYPE html> -->
+<html lang="en">
+
+<head>
+    <!-- Meta tags-->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Variant Density Plot</title>
+    <!-- Include Plotly.js library and css bootstrap for style-->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+    <script src='https://cdn.plot.ly/plotly-2.27.0.min.js'></script>
+</head>
+
+<body class="container pt-5">
+
+    <!-- Title -->
+    <h3 class="text-primary">Data Upload and Variant Density Visualization Interface (I-BIX-DAT 2024)</h3>
+
+    <!-- Form for user inputs -->
+    <div class="row">
+        <h6>Upload may take awhile</h6>
+        <div class="col-md-3">
+            <!-- Genome (VCF) Files upload -->
+            <label class="form-label">File <span class="text-danger"><small><i>(required)</i></small></span>
+            </label>
+            <input type="file" id="fileInput" multiple="true" class="form-control" />
+        </div>
+
+        <div class="col-md-3">
+            <!-- Upload button -->
+            <button class="btn btn-md btn-primary mt-4" onclick="onUploadFiles()">Upload Files</button>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-3">
+            <!-- Genome names dropdown -->
+            <label class="form-label">Genome Names <span class="text-danger"><small><i>(required)</i></small></span>
+            </label>
+            <select class="form-control" id="gonome_names">
+                <option>--select genome name--</option>
+            </select>
+        </div>
+
+        <div class="col-md-3">
+            <!-- Chromosomes dropdown -->
+            <label class="form-label">Chromosomes <span class="text-danger"><small><i>(required)</i></small></span>
+            </label>
+            <select class="form-control" id="chromosomes">
+                <option>--select chromosome number--</option>
+            </select>
+        </div>
+
+        <div class="col-md-3">
+            <!-- Variants dropdown -->
+            <label class="form-label">Variant Type <span class="text-danger"><small><i>(required)</i></small></span>
+            </label>
+            <select class="form-control" id="variant_type">
+                <option value="SNPs">SNPs</option>
+                <option value="InDels">InDels</option>
+                <option value="Both">SNPs & InDels</option>
+            </select>
+        </div>
+
+        <div class="col-md-3">
+            <!-- Window size input field -->
+            <label class="form-label">Window Size <span
+                    class="text-danger"><small><i>(required)</i></small></span></label>
+            <input id="window_size" class="form-control" type="number" required />
+        </div>
+
+        <div class="col-md-3">
+            <!-- Plot button -->
+            <button class="btn btn-md btn-primary mt-4" id="plot_btn" onclick="plotData()">Plot Graph</button>
+        </div>
+    </div>
+
+    <!-- Graph area -->
+    <div id="plot" style="height: 500px;"></div>
+
+    <!-- JavaScript section -->
+    <script>
+        const baseUrl = `http://localhost:8000/api`
+        // Function to make AJAX request and plot density graph
+        function plotVariantDensity(genome, chromosome, windowSize, variantType) {
+            // Make GET request to server
+            fetch(`${baseUrl}/variant-density/${genome}/${chromosome}/${windowSize}`)
+                .then(response => response.json())
+                .then(data => {
+                    // Extract x and y values from response based on variant type
+                    let yValues;
+                    if (variantType === 'SNPs') {
+                        yValues = data.variantDensityData.map(item => item.num_snps);
+                    } else if (variantType === 'InDels') {
+                        yValues = data.variantDensityData.map(item => item.num_indel);
+                    } else {
+                        yValues = data.variantDensityData.map(item => item.variant_count);
+                    }
+                    const positions = data.variantDensityData.map(item => item.window_start);
+
+                    // Plot data using Plotly
+                    var trace1 = {
+                        x: positions,
+                        y: yValues,
+                        type: 'line'
+                    };
+                    var plot_data = [trace1];
+
+                    var layout = {
+                        title: 'Variant Density Plot',
+                        xaxis: {
+                            title: 'Chromosome Position',
+                            showgrid: false,
+                            zeroline: false
+                        },
+                        yaxis: {
+                            // Change y-label accordingly
+                            title: variantType === 'SNPs' ? 'SNPs counts' : variantType === 'InDels' ? 'InDels counts' : 'Variants count',
+                            showline: false
+                        }
+                    };
+                    Plotly.newPlot('plot', plot_data, layout);
+
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        // Function to fetch genome names, chromosomes and variant types
+        function getData() {
+            // Make GET request to server to fetch genome names
+            fetch(`${baseUrl}/genomes`)
+                .then(response => response.json())
+                .then(data => {
+                    const selectElement = document.getElementById('gonome_names');
+                    selectElement.innerHTML = '';
+                    // Populate genome names dropdown
+                    data.forEach(item => {
+                        const option = document.createElement('option');
+                        option.value = item.name; // Set the value attribute
+                        option.textContent = item.name; // Set the text content
+                        selectElement.appendChild(option); // Append the option to select
+                    });
+                })
+                .catch(error => console.error('Error:', error));
+
+            // Make GET request to server to fetch chromosome numbers
+            fetch(`${baseUrl}/chromosome_inputs`)
+                .then(response => response.json())
+                .then(data => {
+                    const selectElement = document.getElementById('chromosomes');
+                    selectElement.innerHTML = '';
+                    // Populate chromosomes dropdown
+                    data.forEach(item => {
+                        const option = document.createElement('option');
+                        option.value = item.CHROM; // Set the value attribute
+                        option.textContent = item.CHROM; // Set the text content
+                        selectElement.appendChild(option); // Append the option to select
+                    });
+
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        // Fetch data and plot graph on page load
+        getData();
+
+        function onUploadFiles() {
+            const fileInput = document.getElementById('fileInput');
+            const files = fileInput.files;
+
+            // Check if files were selected
+            if (!files.length) {
+                alert('Please select one or more files.');
+                return;
+            }
+
+            // Prepare formData object
+            const formData = new FormData();
+            for (let i = 0; i < files.length; i++) {
+                formData.append('files', files[i]);
+            }
+
+            // Send POST request to upload files
+            fetch(`${baseUrl}/upload_files`, { method: 'POST', body: formData })
+                .then(response => {
+                    if (response.ok) {
+                        // Upload successful
+                        alert('Files uploaded successfully.');
+                        getData(); // Refresh data after successful upload
+                    } else {
+                        // Upload failed
+                        alert('Failed to upload files.');
+                    }
+                })
+                .catch(error => {
+                    // Network error or server error
+                    console.error('Error:', error);
+                    alert('An error occurred while uploading the files.');
+                });
+        }
+        // Function to handle plotting data on button click
+        function plotData() {
+            // Get user selected genome
+            const genomeNameElement = document.getElementById("gonome_names")
+            const genomeName_selectedOption = genomeNameElement.options[genomeNameElement.selectedIndex];
+            const genomeName_selectedValue = genomeName_selectedOption.value;
+
+            // Get user selected chromosome
+            const chromsElement = document.getElementById("chromosomes")
+            const chromsName_selectedOption = chromsElement.options[chromsElement.selectedIndex];
+            const chromsName_selectedValue = chromsName_selectedOption.value;
+
+            // Get user selected chromosome
+            const variantElement = document.getElementById("variant_type")
+            const variantType_selectedOption = variantElement.options[variantElement.selectedIndex];
+            const variantType_selectedValue = variantType_selectedOption.value;
+
+
+            // Get user specified window size
+            const winSizeNameElement = document.getElementById("window_size").value
+
+            // Plot variant density plot
+            plotVariantDensity(genomeName_selectedValue, chromsName_selectedValue, Number(winSizeNameElement), variantType_selectedValue);
+        }
+
+    </script>
+</body>
+
+</html>
